@@ -18,10 +18,9 @@ def train(args):
     print(f"Starting training on {device} | Test Mode: {args.test}")
 
     # 1. Initialize Dataset & Preprocessor
-    # If testing, just use one year to keep the xarray lazy load extremely fast
     years = [1980] if args.test else range(1980, 2021)
     dataloader = get_dataloader(data_dir='./data', years=years, batch_size=args.batch_size)
-    preprocessor = TemperaturePreprocessor()
+    preprocessor = TemperaturePreprocessor(t_min=200.0, t_max=320.0)
 
     # 2. Initialize Model
     model = ClimateTranslatorVAE(era5_in_channels=1, wrf_out_channels=1).to(device)
@@ -29,26 +28,28 @@ def train(args):
 
     # 3. Training Loop Setup
     epochs = 2 if args.test else args.epochs
-    max_batches = 50 if args.test else len(dataloader) # Limit batches if testing
-    beta = 0.01 # KL Divergence weighting
+    max_batches = 50 if args.test else len(dataloader) 
+    beta = 0.01 
 
     model.train()
     for epoch in range(epochs):
         epoch_loss = 0.0
         
-        # Create progress bar
         pbar = tqdm(enumerate(dataloader), total=max_batches, desc=f"Epoch {epoch+1}/{epochs}")
         
         for batch_idx, batch in pbar:
             if args.test and batch_idx >= max_batches:
-                break # Exit early in test mode
+                break 
                 
             era5_data = preprocessor.normalize(batch["era5"].to(device))
             conus_data = preprocessor.normalize(batch["conus"].to(device))
 
             # Forward
             optimizer.zero_grad()
-            wrf_pred, posterior = model(era5_data)
+            
+            # Pass the target shape just like we did in the sanity check
+            target_shape = conus_data.shape[2:]
+            wrf_pred, posterior = model(era5_data, target_shape=target_shape)
 
             # Loss
             recon_loss = F.mse_loss(wrf_pred, conus_data)
@@ -60,8 +61,6 @@ def train(args):
             optimizer.step()
 
             epoch_loss += loss.item()
-            
-            # Update progress bar with current loss to visually verify it goes down
             pbar.set_postfix({"Loss": f"{loss.item():.4f}", "Recon": f"{recon_loss.item():.4f}"})
 
         avg_loss = epoch_loss / max_batches

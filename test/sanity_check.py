@@ -1,11 +1,11 @@
-# sanity_check.py
+# test/sanity_check.py
 import sys
 import os
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-# Ensure src modules can be found
+# Go up one level from 'test/' to the root directory so 'src' can be found
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.dataloader import get_dataloader
@@ -57,7 +57,12 @@ def run_sanity_check():
     try:
         # Forward pass and Loss
         optimizer.zero_grad()
-        wrf_pred, posterior = model(era5_norm)
+        
+        # Extract target shape (Height, Width) from the CONUS tensor
+        target_shape = conus_norm.shape[2:] 
+        
+        # Pass the target shape into the model
+        wrf_pred, posterior = model(era5_norm, target_shape=target_shape)
         
         # Calculate standard VAE Loss: MSE + beta * KL Divergence
         recon_loss = F.mse_loss(wrf_pred, conus_norm)

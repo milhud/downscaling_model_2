@@ -1,6 +1,7 @@
 # src/model.py
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from diffusers import ModelMixin, ConfigMixin
 from diffusers.configuration_utils import register_to_config
 from diffusers.models.autoencoders.vae import Encoder, Decoder, DiagonalGaussianDistribution
@@ -26,7 +27,7 @@ class ClimateTranslatorVAE(ModelMixin, ConfigMixin):
             "DownEncoderBlock2D"
         ),
         
-        # Decoder: 5 blocks = 4 upsample steps (e.g., 8x8 -> 16x16 -> 32x32 -> 64x64 -> 128x128 -> 256x256)
+        # Decoder: 5 blocks = 4 upsample steps 
         decoder_block_out_channels: tuple = (256, 128, 64, 32, 32),
         decoder_up_block_types: tuple = (
             "UpDecoderBlock2D", 
@@ -83,13 +84,23 @@ class ClimateTranslatorVAE(ModelMixin, ConfigMixin):
         posterior = DiagonalGaussianDistribution(moments)
         return posterior
 
-    def decode(self, z: torch.Tensor) -> torch.Tensor:
+    def decode(self, z: torch.Tensor, target_shape: tuple = None) -> torch.Tensor:
         """Expands diffusion latent space into WRF CONUS404 data."""
         z = self.post_quant_conv(z)
         wrf_reconstruction = self.decoder(z)
+        
+        # Dynamically interpolate to match the exact CONUS grid size
+        if target_shape is not None:
+            wrf_reconstruction = F.interpolate(
+                wrf_reconstruction, 
+                size=target_shape, 
+                mode="bilinear", 
+                align_corners=False
+            )
+            
         return wrf_reconstruction
 
-    def forward(self, x: torch.Tensor, sample_posterior: bool = True) -> tuple:
+    def forward(self, x: torch.Tensor, target_shape: tuple = None, sample_posterior: bool = True) -> tuple:
         """
         Forward pass for training. 
         Returns the WRF prediction and the posterior for the KL-divergence loss.
@@ -101,5 +112,5 @@ class ClimateTranslatorVAE(ModelMixin, ConfigMixin):
         else:
             z = posterior.mode()
             
-        wrf_pred = self.decode(z)
+        wrf_pred = self.decode(z, target_shape=target_shape)
         return wrf_pred, posterior
