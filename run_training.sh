@@ -9,4 +9,4 @@
 #SBATCH --account=s1001
 #SBATCH --output=training_%j.log
 echo -e "\n--- Running Full Training ---"
-python3 src/train.py --batch_size=8 --epochs=50
+python3 train.py --batch_size=8 --epochs=50
