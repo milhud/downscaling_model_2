@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 # Ensure src modules can be found
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.dataloader import get_dataloader
 from src.preprocess import TemperaturePreprocessor
