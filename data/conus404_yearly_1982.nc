@@ -1,0 +1,1 @@
+../../model/data/conus404_yearly_1982.nc
